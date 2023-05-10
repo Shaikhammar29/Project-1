@@ -1,0 +1,61 @@
+-- Create a new database
+CREATE DATABASE example_db;
+
+-- Use the new database
+USE example_db;
+
+-- Create a new table for customers
+CREATE TABLE customers (
+  customer_id INT AUTO_INCREMENT PRIMARY KEY,
+  customer_name VARCHAR(50),
+  email VARCHAR(50),
+  phone VARCHAR(20)
+);
+
+-- Insert some sample data into the customers table
+INSERT INTO customers (customer_name, email, phone)
+VALUES
+  ('John Doe', 'johndoe@example.com', '555-1234'),
+  ('Jane Smith', 'janesmith@example.com', '555-5678'),
+  ('Bob Johnson', 'bjohnson@example.com', '555-9012');
+
+-- Create a new table for orders
+CREATE TABLE orders (
+  order_id INT AUTO_INCREMENT PRIMARY KEY,
+  customer_id INT,
+  order_date DATE,
+  FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+);
+
+-- Insert some sample data into the orders table
+INSERT INTO orders (customer_id, order_date)
+VALUES
+  (1, '2022-01-01'),
+  (2, '2022-01-02'),
+  (3, '2022-01-03');
+
+-- Create a new table for order items
+CREATE TABLE order_items (
+  order_id INT,
+  product_name VARCHAR(50),
+  price DECIMAL(10,2),
+  quantity INT,
+  FOREIGN KEY (order_id) REFERENCES orders(order_id)
+);
+
+-- Insert some sample data into the order_items table
+INSERT INTO order_items (order_id, product_name, price, quantity)
+VALUES
+  (1, 'Product A', 10.00, 2),
+  (1, 'Product B', 20.00, 1),
+  (2, 'Product C', 15.00, 3),
+  (3, 'Product D', 5.00, 4);
+
+-- Retrieve data from the tables to display order information
+SELECT orders.order_id, customers.customer_name, orders.order_date, SUM(order_items.quantity * order_items.price) AS total_price
+FROM orders
+JOIN customers ON orders.customer_id = customers.customer_id
+JOIN order_items ON orders.order_id = order_items.order_id
+GROUP BY orders.order_id
+HAVING total_price > 50
+ORDER BY orders.order_date DESC;
