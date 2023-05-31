@@ -1,0 +1,259 @@
+# reading the dataset
+data = pd.read_csv('drug.csv')
+
+# lets print the shape of the dataset
+print("The Shape of the Dataset :", data.shape)
+
+
+
+data.head()
+
+
+
+print("Number of Unique Drugs Present in the Dataset :", data['drugName'].nunique())
+print("Number of Unique Medical Conditions Present in the Dataset :", data['condition'].nunique())
+
+print("\nThe Time Period of Collecting the Data")
+print("Starting Date :", data['date'].min())
+print("Ending Date :", data['date'].max())
+
+
+
+# Lets summarize the Dataset
+data[['rating','usefulCount']].describe()
+
+
+
+# Lets check the Number and Name of the Drugs with 0 Usefull Count in Detail
+print("Analysis on Useless Drugs")
+print("----------------------------")
+print("The Number of Drugs with No Useful Count :", data[data['usefulCount'] == 0].count()[0])
+
+# Lets check the Number of Drugs with No Useful Count with Review Greater than or Equal to 8
+print("Number of Good Drugs with Lesser Useful Count :", data[(data['usefulCount'] == 0) &
+                                                 data['rating'] >= 8].count()[0])
+
+# Lets Check the Average Rating of the Drugs with No Useful Count
+print("Average Rating of Drugs with No Useful Count: {0:.2f}".format(data[data['usefulCount'] == 0]['rating'].mean()))
+
+print("\nAnalysis on Useful Drugs")
+print("----------------------------")
+print("The Number of Drugs with Greater than 1000 Useful Counts :", data[data['usefulCount'] > 1000].count()[0])
+print("Average Rating of Drugs with 1000+ Useful Counts :", data[data['usefulCount'] > 1000]['rating'].mean())
+print("\nName and Condition of these Drugs: \n\n", data[data['usefulCount'] > 1000][['drugName','condition']].reset_index(drop = True))
+
+
+
+data[['drugName','condition','review']].describe(include = 'object')
+
+
+
+data.isnull().sum()
+
+
+
+# As we know Condition is an Important Column, so we will Delete all the Records where Condition is 0
+data = data.dropna()
+
+# Lets Check the Missing Values Now
+data.isnull().sum().sum()
+
+
+
+# Lets Chech the Distribution of rating and Useful Count
+plt.rcParams['figure.figsize'] = (15, 4)
+
+plt.subplot(1, 2, 1)
+sns.distplot(data['rating'])
+
+plt.subplot(1, 2, 2)
+sns.distplot(data['usefulCount'])
+
+plt.suptitle('Distribution of Rating and Useful Count\n', fontsize=20)
+plt.show()
+
+
+
+# Lets Check the Impact of Ratings on usefulness
+
+plt.rcParams['figure.figsize'] = (15, 4)
+
+sns.barplot(x=data['rating'], y=data['usefulCount'], palette='hot')
+plt.grid()
+plt.xlabel('\nRatings')
+plt.ylabel('Count\n', fontsize=20)
+plt.title('\nRating vs Usefulness\n', fontsize=20)
+plt.show()
+
+
+
+# Checking Whether the Length of Review has any Impact on Ratings of the Drugs
+
+# for that we need to Create a new Column to calculate Length of the Reviews
+data['len'] = data['review'].apply(len)
+
+
+
+data[['rating','len']].groupby(['rating']).agg(['min','mean','max'])
+
+
+
+# as it is clear that the reviews have so many unnecessary things such as Stopwords, Punctuations, Numbers
+
+# First Lets remove Punctuations from the Reviews
+def punctuation_removal(messy_str):
+    clean_list = [char for char in messy_str if char not in string.punctuation]
+    clean_str = ''.join(clean_list)
+    return clean_str
+
+data['review'] = data['review'].apply(punctuation_removal)
+
+
+
+import string
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+
+def punctuation_removal(messy_str):
+    if isinstance(messy_str, str):
+        clean_list = [char for char in messy_str if char not in string.punctuation]
+        clean_str = ''.join(clean_list)
+        return clean_str
+    else:
+        return str(messy_str)  # Convert non-string object to string
+
+stop = stopwords.words('english')
+stop.append("i'm")
+
+stop_words = [punctuation_removal(item) for item in stop]
+
+def stopwords_removal(messy_str):
+    if isinstance(messy_str, str):
+        messy_str = word_tokenize(messy_str)
+        return [word.lower() for word in messy_str if word.lower() not in stop_words]
+    else:
+        return []  # Return an empty list if not a string
+
+data['review'] = data['review'].apply(stopwords_removal)
+
+
+
+# Lets remove the Numbers also
+
+import re
+def drop_numbers(list_text):
+    list_text_new = []
+    for i in list_text:
+        if not re.search('\d', i):
+            list_text_new.append(i)
+    return ' '.join(list_text_new)
+
+data['review'] = data['review'].apply(drop_numbers)
+
+
+
+# for using Sentiment Analyzer we will have to download the Vader Lexicon from NLTK
+
+import nltk
+nltk.download('vader_lexicon')
+
+
+
+# Lets calculate the Sentiment from Reviews
+
+import numpy as np
+import pandas as pd
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+sid = SentimentIntensityAnalyzer()
+
+train_sentiments = []
+
+for i in data['review']:
+    train_sentiments.append(sid.polarity_scores(i).get('compound'))
+    
+train_sentiments = np.asarray(train_sentiments)
+data['sentiment'] = pd.Series(data=train_sentiments)
+
+
+
+# Lets check Impact of Sentiment on Reviews
+data[['rating', 'sentiment']].groupby(['rating']).agg(['min', 'mean', 'max'])
+
+
+
+# Lets remove the unique Id, date, review, len, and sentiment column also
+data = data.drop(['date','uniqueID','sentiment','review','len'], axis = 1)
+
+# Lets check the name of columns now
+data.columns
+
+
+
+# Lets calculate an Effective Rating
+
+
+min_rating = data['rating'].min()
+max_rating = data['rating'].max()
+
+def scale_rating(rating):
+    rating -= min_rating
+    rating = rating/(max_rating -1)
+    rating *= 5
+    rating = int(round(rating,0))
+    
+    if(int(rating) == 0 or int(rating)==1 or int(rating)==2):
+        return 0
+    else:
+        return 1
+data['eff_score'] = data['rating'].apply(scale_rating)
+
+
+
+# Lets also calculate Usefulness Score
+
+data['usefulness'] = data['rating']*data['usefulCount']*data['eff_score']
+
+# Lets check the top 10 Most Useful Drugs with their Respective Conditions
+data[['drugName','condition','usefulness']][data['usefulness'] >
+                                                data['usefulness'].mean()].sort_values(by = 'usefulness',
+                                                                                      ascending = False).head(10).reset_index(drop = True)
+
+
+
+# Lets calculate the Number of Useless and Useful Drugs for Each Condition
+
+@interact
+def check(condition = list(data['condition'].value_counts().index)):
+    return data[data['condition'] == condition]['eff_score'].value_counts()
+
+
+
+# Lets check the Most Common Conditions
+
+print("Number of Unique Conditions :", data['condition'].nunique())
+data['condition'].value_counts().head(10)
+
+
+
+# Lets remove all the duplicates from the dataset
+data = data.drop_duplicates()
+
+
+
+# Lets find the Highest and Lowest Rated Drugs for each Condition
+@interact
+def high_low_rate(condition=list(data['condition'].value_counts().index)):
+    print("\nTop 5 Drugs")
+    top_drugs = data[data['condition'] == condition][['drugName', 'usefulness']].sort_values(by='usefulness', 
+                                                                                             ascending=False).head().reset_index(drop=True)
+    display(top_drugs)
+    
+    print("\nBottom 5 Drugs")
+    bottom_drugs = data[data['condition'] == condition][['drugName', 'usefulness']].sort_values(by='usefulness', 
+                                                                                                ascending=True).head().reset_index(drop=True)
+    display(bottom_drugs)
+
+
+
+
